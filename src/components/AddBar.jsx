@@ -49,8 +49,7 @@ export default function AddBar({ items, onAdd }) {
           value={term}
           onChange={e => setTerm(e.target.value)}
           onFocus={() => setFocused(true)}
-          // délai pour laisser le clic sur une suggestion se produire
-          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          onBlur={() => setFocused(false)}
           placeholder="Rechercher ou ajouter un article"
           aria-label="Rechercher ou ajouter un article"
         />
@@ -60,7 +59,8 @@ export default function AddBar({ items, onAdd }) {
       </form>
 
       {showSuggestions && (
-        <ul className="addbar-suggestions">
+        // mousedown bloqué : le champ garde le focus (et le clavier reste ouvert)
+        <ul className="addbar-suggestions" onMouseDown={e => e.preventDefault()}>
           {matches.map(item => (
             <li key={item.id}>
               <button type="button" onClick={() => pick(item)}>
