@@ -1,7 +1,7 @@
 // src/utils/rayons.js
 // Liste des rayons + détection automatique à partir du nom de l'article.
 
-import { normalizeName } from './normalize'
+import { normalizeName } from './normalize.js'
 
 export const RAYON_AUTRE = 'autre'
 
@@ -66,6 +66,8 @@ const KEYWORDS = {
     'lait demi', 'yaourt', 'fromage', 'beurre', 'comte', 'gruyere', 'emmental',
     'camembert', 'mozzarella', 'chevre', 'roquefort', 'parmesan', 'oeuf', 'skyr',
     'raclette', 'feta', 'ricotta', 'mascarpone', 'creme', 'lait', 'brie', 'cancoillotte',
+    // pâtes à dérouler : rayon frais (sinon "pate" les envoie avec le pâté)
+    'pate brisee', 'pate feuilletee', 'pate sablee', 'pate a pizza', 'pate a crepe',
   ],
 
   boulangerie: [

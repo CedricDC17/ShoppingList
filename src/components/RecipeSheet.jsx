@@ -9,9 +9,17 @@ import {
 import {
   parseIngredientsText,
   parseStepsText,
+  parseRecipeText,
   ingredientsToText,
+  stepsToText,
+  isSection,
+  countIngredients,
+  splitStepLabel,
 } from '../utils/parseRecipe'
+import { scaleQuantity } from '../utils/servings'
 import { TAG_GROUPS } from '../utils/tags'
+import RecipeAITools from './RecipeAITools'
+import ServingsStepper from './ServingsStepper'
 import useWakeLock from '../hooks/useWakeLock'
 import useDismissable from '../hooks/useDismissable'
 
@@ -39,12 +47,16 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
 
   // Brouillon d'édition
   const [title, setTitle] = useState('')
+  const [servings, setServings] = useState('')
   const [ingredientsText, setIngredientsText] = useState('')
   const [stepsText, setStepsText] = useState('')
   const [notes, setNotes] = useState('')
   const [tags, setTags] = useState([])
   const [imageUrl, setImageUrl] = useState('')
   const [imageFile, setImageFile] = useState(null)
+
+  // Nombre de personnes affiché : les quantités sont recalculées à la volée
+  const [shownServings, setShownServings] = useState(null)
 
   // Mode cuisine : ce qui est déjà fait, le temps de la préparation
   const [doneIngredients, setDoneIngredients] = useState([])
@@ -54,8 +66,10 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
     if (!recipe) return
     setEditMode(false)
     setTitle(recipe.title || '')
+    setServings(recipe.servings ? String(recipe.servings) : '')
+    setShownServings(recipe.servings || null)
     setIngredientsText(ingredientsToText(recipe.ingredients || []))
-    setStepsText((recipe.steps || []).join('\n'))
+    setStepsText(stepsToText(recipe.steps || []))
     setNotes(recipe.notes || '')
     setTags(recipe.tags || [])
     setImageUrl(recipe.thumbUrl || recipe.imageUrl || '')
@@ -97,6 +111,30 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
   }, [editMode, onClose])
 
   useDismissable(true, requestClose)
+
+  // Texte de la recette en cours d'édition, tel que l'IA le recevra
+  const draftText = () =>
+    [
+      title,
+      servings && `Pour ${servings} personnes`,
+      `Ingrédients :\n${ingredientsText}`,
+      `Préparation :\n${stepsText}`,
+      tags.length ? `Tags : ${tags.join(', ')}` : '',
+      notes.trim() && `Notes :\n${notes}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+
+  // Recette remise en forme par l'IA : on redistribue dans les champs d'édition
+  const applyFormatted = text => {
+    const parsed = parseRecipeText(text)
+    if (parsed.title) setTitle(parsed.title)
+    setServings(parsed.servings ? String(parsed.servings) : '')
+    setIngredientsText(ingredientsToText(parsed.ingredients))
+    setStepsText(stepsToText(parsed.steps))
+    setNotes(parsed.notes)
+    if (parsed.tags.length) setTags(parsed.tags)
+  }
 
   const toggleTag = tag =>
     setTags(list => (list.includes(tag) ? list.filter(t => t !== tag) : [...list, tag]))
@@ -144,8 +182,10 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
       setPhotoStep('')
     }
 
+    const servingsNumber = parseInt(servings, 10)
     const updated = {
       title: title.trim(),
+      servings: servingsNumber > 0 && servingsNumber < 100 ? servingsNumber : null,
       ingredients: parseIngredientsText(ingredientsText),
       steps: parseStepsText(stepsText),
       notes,
@@ -155,6 +195,7 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
     }
     await updateDoc(recipeRef(recipe.id), updated)
     onSave({ ...recipe, ...updated })
+    setShownServings(updated.servings)
     setSaving(false)
     // En cas d'échec photo, on reste en édition pour que le message soit vu
     if (!photoFailed) setEditMode(false)
@@ -177,6 +218,17 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
 
   const ingredients = recipe.ingredients || []
   const steps = recipe.steps || []
+  const ingredientCount = countIngredients(ingredients)
+  const stepCount = steps.filter(st => !isSection(st)).length
+  const factor = recipe.servings && shownServings ? shownServings / recipe.servings : 1
+
+  // Numérotation des étapes : elle repart de 1 à chaque partie
+  const stepNumbers = []
+  steps.reduce((n, st) => {
+    const next = isSection(st) ? 0 : n + 1
+    stepNumbers.push(next)
+    return next
+  }, 0)
 
   return (
     <div className="recipe-sheet">
@@ -227,14 +279,35 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
 
         {/* ---------------- Titre ---------------- */}
         {editMode ? (
-          <input
-            className="sheet-title-input"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="Titre de la recette"
-          />
+          <>
+            <input
+              className="sheet-title-input"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Titre de la recette"
+            />
+            <label className="servings-field">
+              Pour
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                max="99"
+                value={servings}
+                onChange={e => setServings(e.target.value)}
+                placeholder="—"
+              />
+              personnes
+            </label>
+            <RecipeAITools getText={draftText} onApply={applyFormatted} />
+          </>
         ) : (
-          <h1 className="sheet-title">{recipe.title}</h1>
+          <>
+            <h1 className="sheet-title">{recipe.title}</h1>
+            {recipe.servings && shownServings && (
+              <ServingsStepper value={shownServings} onChange={setShownServings} base={recipe.servings} />
+            )}
+          </>
         )}
 
         {/* ---------------- Tags ---------------- */}
@@ -274,13 +347,13 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
         )}
 
         {/* ---------------- Ingrédients ---------------- */}
-        {(editMode || ingredients.length > 0) && (
+        {(editMode || ingredientCount > 0) && (
           <div className="block">
             <h2 className="block-title">
               Ingrédients
-              {!editMode && ingredients.length > 0 && (
+              {!editMode && ingredientCount > 0 && (
                 <span className="block-count">
-                  {doneIngredients.length}/{ingredients.length}
+                  {doneIngredients.length}/{ingredientCount}
                 </span>
               )}
             </h2>
@@ -295,36 +368,41 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
                 />
                 <p className="field-hint">
                   Un par ligne. Les quantités sont reconnues automatiquement, avant ou après le nom.
+                  Une ligne qui finit par « : » (ex. « Pâte : ») commence une partie.
                 </p>
               </>
             ) : (
               <ul className="check-list">
-                {ingredients.map((ing, i) => (
-                  <li
-                    key={i}
-                    className={doneIngredients.includes(i) ? 'done' : ''}
-                    onClick={() => toggleDone(doneIngredients, setDoneIngredients, i)}
-                  >
-                    <span className="check-box">
-                      {doneIngredients.includes(i) && <Check size={14} strokeWidth={3} />}
-                    </span>
-                    <span className="check-text">
-                      {ing.quantity && <b>{ing.quantity}</b>} {ing.name}
-                    </span>
-                  </li>
-                ))}
+                {ingredients.map((ing, i) =>
+                  isSection(ing) ? (
+                    <li key={i} className="list-section">{ing.section}</li>
+                  ) : (
+                    <li
+                      key={i}
+                      className={doneIngredients.includes(i) ? 'done' : ''}
+                      onClick={() => toggleDone(doneIngredients, setDoneIngredients, i)}
+                    >
+                      <span className="check-box">
+                        {doneIngredients.includes(i) && <Check size={14} strokeWidth={3} />}
+                      </span>
+                      <span className="check-text">
+                        {ing.quantity && <b>{scaleQuantity(ing.quantity, factor)}</b>} {ing.name}
+                      </span>
+                    </li>
+                  )
+                )}
               </ul>
             )}
           </div>
         )}
 
         {/* ---------------- Préparation ---------------- */}
-        {(editMode || steps.length > 0) && (
+        {(editMode || stepCount > 0) && (
           <div className="block">
             <h2 className="block-title">
               Préparation
-              {!editMode && steps.length > 0 && (
-                <span className="block-count">{doneSteps.length}/{steps.length}</span>
+              {!editMode && stepCount > 0 && (
+                <span className="block-count">{doneSteps.length}/{stepCount}</span>
               )}
             </h2>
 
@@ -336,20 +414,31 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
                   onChange={e => setStepsText(e.target.value)}
                   placeholder={'Une étape par ligne :\nPréchauffer le four\nMélanger les ingrédients'}
                 />
-                <p className="field-hint">Une étape par ligne, la numérotation est ajoutée toute seule.</p>
+                <p className="field-hint">
+                  Une étape par ligne, la numérotation est ajoutée toute seule. « Titre court : détail »
+                  met le titre en gras. Une ligne qui finit par « : » commence une partie.
+                </p>
               </>
             ) : (
               <ol className="step-list">
-                {steps.map((st, i) => (
-                  <li
-                    key={i}
-                    className={doneSteps.includes(i) ? 'done' : ''}
-                    onClick={() => toggleDone(doneSteps, setDoneSteps, i)}
-                  >
-                    <span className="step-num">{i + 1}</span>
-                    <span className="check-text">{st}</span>
-                  </li>
-                ))}
+                {steps.map((st, i) => {
+                  if (isSection(st)) return <li key={i} className="list-section">{st.section}</li>
+                  const { label, text } = splitStepLabel(st)
+                  return (
+                    <li
+                      key={i}
+                      className={doneSteps.includes(i) ? 'done' : ''}
+                      onClick={() => toggleDone(doneSteps, setDoneSteps, i)}
+                    >
+                      <span className="step-num">{stepNumbers[i]}</span>
+                      <span className="check-text">
+                        {label && <strong className="step-label">{label}</strong>}
+                        {label ? ' ' : ''}
+                        {text}
+                      </span>
+                    </li>
+                  )
+                })}
               </ol>
             )}
           </div>
@@ -373,7 +462,7 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
         )}
 
         {/* Fiche vide : on invite à la compléter plutôt que d'afficher des blocs vides */}
-        {!editMode && ingredients.length === 0 && steps.length === 0 && (
+        {!editMode && ingredientCount === 0 && stepCount === 0 && (
           <div className="sheet-empty">
             <CookingPot size={32} />
             <p>Cette fiche est vide.</p>

@@ -1,9 +1,10 @@
 // src/components/RecipeCard.jsx
 import { CookingPot } from 'lucide-react'
+import { countIngredients } from '../utils/parseRecipe'
 
 export default function RecipeCard({ recipe, onSelect }) {
   const tags = recipe.tags || []
-  const count = recipe.ingredients?.length || 0
+  const count = countIngredients(recipe.ingredients || [])
   // thumbUrl : miniature stockée dans le document. imageUrl : ancien champ Storage.
   const vignette = recipe.thumbUrl || recipe.imageUrl
 

@@ -373,6 +373,115 @@ main {
   min-width: 3.5rem;
 }
 
+/* Parties de recette dans le modal : en-tête cochable par partie */
+.missing-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.missing-group + .missing-group {
+  margin-top: 0.6rem;
+}
+
+.missing-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem 0.9rem 0.1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.missing-group-title input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+/* ---------- Sélecteur de personnes ---------- */
+.servings-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0 1.2rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.servings-stepper > button:not(.servings-reset) {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.servings-stepper > button:not(.servings-reset):hover {
+  border-color: var(--accent);
+}
+
+.servings-value {
+  min-width: 1.5rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.servings-reset {
+  margin-left: 0.25rem;
+  background: none;
+  border: none;
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---------- IA : erreurs et rangement des rayons ---------- */
+.ai-tools-error {
+  color: var(--danger);
+  font-size: 0.82rem;
+  margin-top: 0.45rem;
+  line-height: 1.4;
+}
+
+.rayon-sweep-btn {
+  margin-top: 0.75rem;
+}
+
+.sweep-row {
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
+}
+
+.sweep-name {
+  flex: 1;
+}
+
+.sweep-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.sweep-move b {
+  color: var(--accent-strong);
+}
+
 .missing-hint {
   color: var(--text-muted);
   font-size: 0.9rem;

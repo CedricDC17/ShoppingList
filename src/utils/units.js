@@ -1,4 +1,6 @@
 // src/utils/units.js
+import { matchKey, toDisplayName } from './normalize.js'
+
 // Unités optionnelles. Aucune unité par défaut : si elle est choisie, elle
 // s'affiche simplement en plus de la quantité.
 
@@ -71,4 +73,42 @@ export function parseQuantityForShopping(raw) {
   // Mesure de cuisine (cuillère, pincée, gousse, tranche…) : le nombre n'aide
   // pas à acheter, on ajoute simplement le produit.
   return empty
+}
+
+// Unités convertibles entre elles : [unité de base, facteur]
+const BASE = { g: ['g', 1], kg: ['g', 1000], ml: ['ml', 1], cl: ['ml', 10], L: ['ml', 1000] }
+
+const round = n => Math.round(n * 100) / 100
+
+function addQuantities(a, b) {
+  if (!b.quantity) return a
+  if (!a.quantity) return b
+  if (a.unit === b.unit) return { quantity: round(a.quantity + b.quantity), unit: a.unit }
+  const [baseA, fa] = BASE[a.unit] || []
+  const [baseB, fb] = BASE[b.unit] || []
+  if (baseA && baseA === baseB) {
+    const total = a.quantity * fa + b.quantity * fb
+    if (total >= 1000) return { quantity: round(total / 1000), unit: baseA === 'g' ? 'kg' : 'L' }
+    return { quantity: round(total), unit: baseA }
+  }
+  return a // unités incompatibles (2 paquets + 200 g) : on garde la première
+}
+
+/**
+ * Prépare des ingrédients de recette pour la liste de courses : quantités
+ * converties, et un même produit présent dans plusieurs parties additionné
+ * (100 g de beurre pour la pâte + 50 g pour la crème -> 150 g).
+ * @returns [{ name, quantity, unit }]
+ */
+export function mergeForShopping(ingredients) {
+  const merged = new Map()
+  for (const ing of ingredients) {
+    const name = toDisplayName(ing.name)
+    if (!name) continue
+    const qty = parseQuantityForShopping(ing.quantity)
+    const key = matchKey(name)
+    const prev = merged.get(key)
+    merged.set(key, prev ? { name: prev.name, ...addQuantities(prev, qty) } : { name, ...qty })
+  }
+  return [...merged.values()]
 }

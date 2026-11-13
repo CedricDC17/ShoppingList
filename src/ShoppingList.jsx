@@ -10,6 +10,7 @@ import {
   deleteDoc,
   doc,
   setDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from './firebase'
@@ -23,6 +24,7 @@ import AddBar from './components/AddBar'
 import ItemActionMenu from './components/ItemActionMenu'
 import StoreMode from './components/StoreMode'
 import RayonOrderEditor from './components/RayonOrderEditor'
+import RayonSweep from './components/RayonSweep'
 
 const FAMILY_ID = 'sharedFamily'
 
@@ -64,6 +66,7 @@ export default function ShoppingList() {
   const [storeMode, setStoreMode] = useState(false)
   const [menuItem, setMenuItem] = useState(null)
   const [showRayonEditor, setShowRayonEditor] = useState(false)
+  const [showRayonSweep, setShowRayonSweep] = useState(false)
   const [duplicate, setDuplicate] = useState(null) // { name, existing }
 
   const itemsCol = collection(db, 'families', FAMILY_ID, 'shoppingItems')
@@ -163,6 +166,13 @@ export default function ShoppingList() {
     })
 
   const removeItem = item => deleteDoc(itemRef(item.id))
+
+  // Rayons proposés par l'IA et validés : une seule écriture groupée
+  const applyRayons = async changes => {
+    const batch = writeBatch(db)
+    changes.forEach(({ id, rayon }) => batch.update(itemRef(id), { rayon }))
+    await batch.commit()
+  }
 
   const saveRayonOrder = order => {
     setRayonOrder(order)
@@ -316,6 +326,22 @@ export default function ShoppingList() {
           order={rayonOrder}
           onChange={saveRayonOrder}
           onClose={() => setShowRayonEditor(false)}
+          onSweep={
+            items.length
+              ? () => {
+                  setShowRayonEditor(false)
+                  setShowRayonSweep(true)
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {showRayonSweep && (
+        <RayonSweep
+          items={items}
+          onApply={applyRayons}
+          onClose={() => setShowRayonSweep(false)}
         />
       )}
 

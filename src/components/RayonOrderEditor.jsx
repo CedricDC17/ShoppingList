@@ -1,5 +1,5 @@
 // src/components/RayonOrderEditor.jsx
-import { ChevronUp, ChevronDown } from 'lucide-react'
+import { ChevronUp, ChevronDown, Sparkles } from 'lucide-react'
 import { rayonLabel } from '../utils/rayons'
 
 /**
@@ -7,7 +7,7 @@ import { rayonLabel } from '../utils/rayons'
  * Boutons haut/bas plutôt que glisser-déposer : le drag HTML5 ne fonctionne pas
  * de façon fiable au doigt sur mobile, et c'est un réglage qu'on fait une fois.
  */
-export default function RayonOrderEditor({ order, onChange, onClose }) {
+export default function RayonOrderEditor({ order, onChange, onClose, onSweep }) {
   const move = (index, delta) => {
     const target = index + delta
     if (target < 0 || target >= order.length) return
@@ -55,6 +55,12 @@ export default function RayonOrderEditor({ order, onChange, onClose }) {
             </li>
           ))}
         </ul>
+
+        {onSweep && (
+          <button className="btn-ghost small rayon-sweep-btn" onClick={onSweep}>
+            <Sparkles size={14} /> Ranger les articles dans les rayons avec l'IA
+          </button>
+        )}
 
         <div className="overlay-footer">
           <button className="btn-save" onClick={onClose}>Terminé</button>

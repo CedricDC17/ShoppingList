@@ -64,6 +64,8 @@ L'écran principal, celui qu'on ouvre le jour des courses.
   </tr>
 </table>
 
+**Rangement par IA** : depuis « Ordre des rayons », l'IA propose un rayon pour chaque article connu. Les déplacements sont listés et validés un par un avant d'être appliqués.
+
 **Rayons reconnus automatiquement** à partir du nom : Fruits & Légumes, Boucherie, Poissonnerie, Crèmerie, Boulangerie, Épicerie, Surgelés, Boissons, Hygiène, Entretien, Autre. La détection privilégie le mot-clé le plus long, pour que « lait de coco » aille en Épicerie et non en Crèmerie. Un rayon mal deviné se corrige d'un appui long.
 
 ### Recettes
@@ -72,12 +74,18 @@ L'écran principal, celui qu'on ouvre le jour des courses.
   <tr>
     <td width="45%"><img src="docs/screenshots/08-import-recette.png" width="230"></td>
     <td><b>Collez n'importe quel format</b><br><br>
-    Le parseur accepte les puces (<code>-</code>, <code>•</code>, <code>*</code>), la numérotation, les sections nommées ou absentes, les quantités avant ou après le nom, les unités en toutes lettres et les fractions.<br><br>
+    Le parseur accepte les puces (<code>-</code>, <code>•</code>, <code>*</code>), la numérotation, les sections nommées ou absentes, les quantités avant ou après le nom, les unités en toutes lettres et les fractions, en français comme en anglais.<br><br>
+    Les recettes de réseaux sociaux sont nettoyées : émojis, hashtags, mentions, « Étape 1 : », « abonne-toi » et « bon appétit » disparaissent.<br><br>
     Un aperçu affiche ce qui a été compris <b>avant</b> d'enregistrer.
     </td>
   </tr>
 </table>
 
+- **Recettes en plusieurs parties** : « Pour la pâte : », « Crème : » ou « Recette 2 : le glaçage » deviennent des intertitres, dans les ingrédients comme dans les étapes. La numérotation des étapes repart de 1 à chaque partie
+- **Mise au propre par IA**, deux options :
+  - **Copier le prompt** copie des consignes + la recette en cours ; on les colle dans ChatGPT, Claude… et on recolle la réponse
+  - **Formater avec l'IA** fait la même chose sans quitter l'appli (voir [IA](#ia)). L'IA traduit en français, convertit en unités métriques, raccourcit les noms d'ingrédients pour la liste de courses, choisit les tags et donne à chaque étape un titre court en gras
+- **Nombre de personnes** : un sélecteur − 4 + recalcule les quantités, arrondies de façon lisible (265 g, 1 ½ citron, 5 œufs)
 - **Recherche par titre et par ingrédient** : chercher « miel » remonte les recettes qui en contiennent
 - **Tags fixes** classés par famille : Moment (Matin, Midi, Soir, Apéro), Type (Entrée, Plat, Accompagnement, Sauce, Dessert, Gâteau), Contrainte (Rapide, Végé). Seuls les tags réellement utilisés sont proposés au filtrage
 - **Édition en texte libre** : ingrédients et étapes se saisissent dans une zone de texte, une ligne par élément
@@ -95,6 +103,8 @@ L'écran principal, celui qu'on ouvre le jour des courses.
     <td width="45%"><img src="docs/screenshots/10-ingredients-manquants.png" width="230"></td>
   </tr>
 </table>
+
+Le modal reprend les parties de la recette : décocher l'en-tête « Pâte » retire toute la pâte (achetée toute faite, par exemple). Il propose aussi le nombre de personnes. Un ingrédient présent dans plusieurs parties est additionné : 100 g de beurre pour la pâte et 50 g pour la crème donnent `×150 g`.
 
 Les quantités de recette sont converties vers un format utile aux achats : `800 g de pommes de terre` devient `×800 g`, `3 oignons` devient `×3`, et `2 c. à soupe de moutarde` n'ajoute aucune quantité — on achète un pot de moutarde, pas deux cuillères.
 
@@ -138,6 +148,20 @@ VITE_FIREBASE_APP_ID=
 
 L'authentification se fait en **anonyme** : aucun compte à créer, tous les appareils de la famille partagent les mêmes données via un identifiant commun (`sharedFamily`).
 
+### IA
+
+Le bouton « Formater avec l'IA » et le rangement des rayons passent par la fonction serverless `api/ai.js`. La clé API ne quitte jamais le serveur : surtout pas de préfixe `VITE_`, qui la publierait dans le JavaScript de l'appli.
+
+```env
+AI_API_KEY=            # clé OpenRouter
+AI_MODEL=              # facultatif, par défaut openrouter/free (modèles gratuits)
+AI_BASE_URL=           # facultatif, toute API compatible OpenAI
+```
+
+En local, `npm run dev` sert aussi `/api/ai` en lisant ces variables dans `.env`. Sur Vercel, elles se déclarent dans les réglages du projet. Sans clé, seul « Copier le prompt » fonctionne.
+
+Les fournisseurs des modèles gratuits peuvent conserver les textes envoyés : n'y envoyer que des recettes.
+
 ### Structure des données (Firestore)
 
 ```
@@ -155,8 +179,9 @@ families/sharedFamily/
 │
 ├── recipes/{id}              Fiches recettes
 │   ├── title       string
-│   ├── ingredients array     [{ quantity: "200 g", name: "farine" }]
-│   ├── steps       array     ["Préchauffer le four", …]
+│   ├── servings    number    Nombre de personnes (null si inconnu)
+│   ├── ingredients array     [{ quantity: "200 g", name: "farine" }, { section: "Crème" }, …]
+│   ├── steps       array     ["Préchauffer le four : 180 °C", { section: "Crème" }, …]
 │   ├── tags        array     ["Soir", "Plat"]
 │   ├── notes       string
 │   └── thumbUrl    string    Miniature (data URL, ~5 Ko) pour les cartes
@@ -189,8 +214,11 @@ src/
 │   ├── ItemActionMenu.jsx          Menu d'appui long (article)
 │   ├── StoreMode.jsx               Mode magasin
 │   ├── RayonOrderEditor.jsx        Ordre des rayons
+│   ├── RayonSweep.jsx              Rangement des articles par IA
 │   ├── RecipeCard.jsx              Fiche en liste
 │   ├── RecipeSheet.jsx             Fiche plein écran + mode cuisine
+│   ├── RecipeAITools.jsx           « Copier le prompt » / « Formater avec l'IA »
+│   ├── ServingsStepper.jsx         Sélecteur du nombre de personnes
 │   ├── MealRecipePicker.jsx        Choix d'une recette ou repas libre
 │   └── MissingIngredientsModal.jsx Ingrédients manquants
 │
@@ -204,7 +232,14 @@ src/
     ├── rayons.js           Rayons et détection automatique
     ├── units.js            Unités et conversion pour les achats
     ├── tags.js             Tags de recettes
-    └── parseRecipe.js      Analyse d'une recette collée
+    ├── parseRecipe.js      Analyse d'une recette collée
+    ├── recipePrompt.js     Consignes envoyées à l'IA (partagées avec api/)
+    ├── servings.js         Quantités selon le nombre de personnes
+    ├── ai.js               Appels à /api/ai
+    └── clipboard.js        Copie dans le presse-papier
+
+api/
+└── ai.js                   Fonction Vercel : mise en forme et rayons par IA
 ```
 
 ---
@@ -219,7 +254,7 @@ src/
 
 **Photos sans Firebase Storage** — Depuis septembre 2024, provisionner un bucket Cloud Storage impose le plan payant Blaze. Les photos de recettes sont donc redimensionnées à 1200 px, compressées, et enregistrées **dans Firestore** sous forme de data URL. La miniature vit dans le document de la recette (pour les cartes), la photo complète dans un document séparé chargé à la demande — sinon ouvrir la liste téléchargerait toutes les photos. Un plafond de 700 Ko, avec repli automatique sur une qualité inférieure, garantit de rester sous la limite de 1 Mio par document Firestore. Effet de bord agréable : les photos sont consultables hors-ligne, ce qu'une URL Storage ne permet pas.
 
-**Extension possible : import de recettes par IA** — Toute l'analyse d'un texte collé passe par la seule fonction `parseRecipeText()` de `src/utils/parseRecipe.js`. Pour déléguer la compréhension à une IA, il suffit d'y appeler une fonction serverless (dossier `/api` sur Vercel, clé API en variable d'environnement) renvoyant le même objet : aucun composant n'a à changer.
+**Un seul chemin d'import** — L'IA ne renvoie pas de JSON : elle renvoie du texte dans le format que lit `parseRecipeText()`. Coller une recette, coller la réponse d'une IA externe ou utiliser le bouton intégré passent donc par le même parseur et le même aperçu, et le résultat reste relisible et corrigeable avant d'enregistrer.
 
 **Dépendance inutilisée** — `tailwindcss`, `postcss` et `autoprefixer` figurent dans les `devDependencies` mais ne sont utilisés nulle part (aucun fichier de configuration, aucune classe utilitaire). Ils peuvent être retirés sans risque.
 
@@ -227,4 +262,4 @@ src/
 
 ## Déploiement
 
-Le projet est prévu pour **Vercel** : build `npm run build`, dossier de sortie `dist/`. Les variables `VITE_FIREBASE_*` sont à déclarer dans les réglages du projet Vercel.
+Le projet est prévu pour **Vercel** : build `npm run build`, dossier de sortie `dist/`. Les variables `VITE_FIREBASE_*` et `AI_API_KEY` sont à déclarer dans les réglages du projet Vercel. Le dossier `api/` est déployé automatiquement en fonctions serverless.

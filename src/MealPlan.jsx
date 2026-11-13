@@ -13,9 +13,9 @@ import { db } from './firebase';
 import { format } from 'date-fns';
 import MealRecipePicker from './components/MealRecipePicker';
 import MissingIngredientsModal from './components/MissingIngredientsModal';
-import { toDisplayName, findExact } from './utils/normalize';
+import { matchKey } from './utils/normalize';
 import { detectRayon } from './utils/rayons';
-import { parseQuantityForShopping } from './utils/units';
+import { mergeForShopping } from './utils/units';
 
 const FAMILY_ID = 'sharedFamily';
 
@@ -78,11 +78,9 @@ export default function MealPlan() {
     const snap = await getDocs(col);
     const existing = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    for (const ing of ingredients) {
-      const name = toDisplayName(ing.name);
-      if (!name) continue;
-      const { quantity, unit } = parseQuantityForShopping(ing.quantity);
-      const match = findExact(existing, name);
+    for (const { name, quantity, unit } of mergeForShopping(ingredients)) {
+      // "Oeuf" retrouve l'article "Oeufs" déjà connu au lieu d'en créer un second
+      const match = existing.find(item => matchKey(item.name) === matchKey(name));
 
       if (match) {
         await updateDoc(doc(db, 'families', FAMILY_ID, 'shoppingItems', match.id), {

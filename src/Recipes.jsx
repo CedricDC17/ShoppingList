@@ -6,7 +6,8 @@ import './Recipes.css'
 import { Plus, Search, X, SlidersHorizontal } from 'lucide-react'
 import RecipeCard from './components/RecipeCard'
 import RecipeSheet from './components/RecipeSheet'
-import { parseRecipeText, cleanRecipe } from './utils/parseRecipe'
+import RecipeAITools from './components/RecipeAITools'
+import { parseRecipeText, cleanRecipe, isSection, countIngredients } from './utils/parseRecipe'
 import { ALL_TAGS } from './utils/tags'
 import { normalizeName } from './utils/normalize'
 
@@ -58,14 +59,31 @@ export default function Recipes() {
 
   const preview = useMemo(() => (draft.trim() ? parseRecipeText(draft) : null), [draft])
 
+  // Aperçu des ingrédients regroupés par partie : "Pâte : farine, beurre"
+  const previewGroups = useMemo(() => {
+    if (!preview) return []
+    const groups = []
+    for (const entry of preview.ingredients) {
+      if (isSection(entry)) groups.push({ name: entry.section, names: [] })
+      else {
+        if (!groups.length) groups.push({ name: '', names: [] })
+        groups[groups.length - 1].names.push(entry.name)
+      }
+    }
+    return groups.filter(g => g.names.length)
+  }, [preview])
+  const previewCount = preview ? countIngredients(preview.ingredients) : 0
+  const previewSteps = preview ? preview.steps.filter(s => !isSection(s)).length : 0
+
   const createRecipe = async () => {
     if (!preview?.title) return
     const ref = await addDoc(colRef, {
       title: preview.title,
+      servings: preview.servings,
       ingredients: preview.ingredients,
       steps: preview.steps,
       notes: preview.notes,
-      tags: [],
+      tags: preview.tags,
       imageUrl: '',
     })
     setCreating(false)
@@ -168,6 +186,7 @@ export default function Recipes() {
             <h2 className="overlay-title">Nouvelle recette</h2>
             <p className="missing-hint">
               Colle une recette entière (n'importe quel format) ou tape simplement un titre.
+              Recette brouillonne ? Fais-la mettre au propre par une IA.
             </p>
 
             <textarea
@@ -178,18 +197,26 @@ export default function Recipes() {
               placeholder={'Tarte aux pommes\n\nIngrédients :\n- 1 pâte brisée\n- 4 pommes\n- 100 g de sucre\n\nPréparation :\n1. Préchauffer le four à 180°C\n2. Étaler la pâte'}
             />
 
+            <RecipeAITools getText={() => draft} onApply={setDraft} />
+
             {preview && (
               <div className="parse-preview">
                 <strong>{preview.title || '(titre manquant)'}</strong>
                 <span>
-                  {preview.ingredients.length} ingrédient{preview.ingredients.length > 1 ? 's' : ''}
+                  {preview.servings && `${preview.servings} pers. · `}
+                  {previewCount} ingrédient{previewCount > 1 ? 's' : ''}
                   {' · '}
-                  {preview.steps.length} étape{preview.steps.length > 1 ? 's' : ''}
+                  {previewSteps} étape{previewSteps > 1 ? 's' : ''}
+                  {previewGroups.length > 1 && ` · ${previewGroups.length} parties`}
                 </span>
-                {preview.ingredients.length > 0 && (
-                  <p className="parse-preview-list">
-                    {preview.ingredients.map(i => i.name).join(', ')}
+                {previewGroups.map((group, i) => (
+                  <p className="parse-preview-list" key={i}>
+                    {group.name && <b>{group.name} : </b>}
+                    {group.names.join(', ')}
                   </p>
+                ))}
+                {preview.tags.length > 0 && (
+                  <p className="parse-preview-list">Tags : {preview.tags.join(', ')}</p>
                 )}
               </div>
             )}

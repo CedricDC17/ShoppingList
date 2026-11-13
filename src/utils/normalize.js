@@ -35,6 +35,14 @@ function singularizeAll(key) {
   return key.split(' ').map(singularize).join(' ')
 }
 
+/**
+ * Clé de rapprochement : casse, accents et pluriel simple ignorés.
+ * "Oeufs" et "oeuf" donnent la même clé.
+ */
+export function matchKey(name = '') {
+  return singularizeAll(normalizeName(name))
+}
+
 /** Distance de Levenshtein (bornée, suffisante pour des noms d'articles). */
 function levenshtein(a, b) {
   if (a === b) return 0

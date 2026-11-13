@@ -590,9 +590,83 @@
 }
 
 .sheet-notes {
-    font-size: 1rem;
+    font-size: 0.95rem;
     line-height: 1.55;
     color: var(--text-muted);
+    white-space: pre-line;
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 0.8rem 0.95rem;
+}
+
+/* ---------- Parties de recette (pâte, crème…) ---------- */
+.check-list li.list-section,
+.step-list li.list-section {
+    min-height: 0;
+    padding: 0.9rem 0.5rem 0.3rem;
+    cursor: default;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+}
+
+.check-list li.list-section:hover,
+.step-list li.list-section:hover {
+    background: none;
+}
+
+.check-list li.list-section:first-child,
+.step-list li.list-section:first-child {
+    padding-top: 0.2rem;
+}
+
+.step-label {
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* ---------- Nombre de personnes (édition) ---------- */
+.servings-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 0.9rem;
+}
+
+.servings-field input {
+    width: 4rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1rem;
+    text-align: center;
+}
+
+.servings-field input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* ---------- Mise en forme par IA ---------- */
+.ai-tools {
+    margin: 0.6rem 0 1.2rem;
+}
+
+.ai-tools-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.btn-ghost:disabled {
+    opacity: 0.6;
+    cursor: wait;
 }
 
 /* ---------- Édition ---------- */
