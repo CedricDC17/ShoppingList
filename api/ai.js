@@ -5,7 +5,9 @@
 //
 // Variables d'environnement (réglages Vercel, ou .env en local) :
 //   AI_API_KEY   clé OpenRouter (obligatoire)
-//   AI_MODEL     modèle, par défaut "openrouter/free" (routeur de modèles gratuits)
+//   AI_MODEL     modèle, ou plusieurs séparés par des virgules (le suivant
+//                prend le relais si le précédent est saturé ou en panne).
+//                Par défaut : DEFAULT_MODELS ci-dessous.
 //   AI_BASE_URL  API compatible OpenAI, par défaut https://openrouter.ai/api/v1
 //
 // Tâches :
@@ -19,6 +21,22 @@ const MAX_RECIPE_CHARS = 12000
 const MAX_ITEMS = 80
 const RAYON_IDS = new Set(RAYONS.map(r => r.id))
 
+// Le routeur "openrouter/free" tombe souvent sur un modèle qui « réfléchit »
+// une minute avant de répondre. Gemma répond directement (réflexion désactivée
+// par défaut) : on le privilégie, le routeur ne sert qu'en dernier recours.
+const DEFAULT_MODELS = [
+  'google/gemma-4-26b-a4b-it:free',
+  'google/gemma-4-31b-it:free',
+  'openrouter/free',
+]
+
+function modelParams() {
+  const models = (process.env.AI_MODEL || '').split(',').map(m => m.trim()).filter(Boolean)
+  const list = models.length ? models : DEFAULT_MODELS
+  // "models" (repli automatique) est propre à OpenRouter
+  return list.length > 1 ? { models: list } : { model: list[0] }
+}
+
 async function complete(system, user, maxTokens) {
   const key = process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY
   const base = (process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '')
@@ -30,7 +48,7 @@ async function complete(system, user, maxTokens) {
       'X-Title': 'Liste Courses',
     },
     body: JSON.stringify({
-      model: process.env.AI_MODEL || 'openrouter/free',
+      ...modelParams(),
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },

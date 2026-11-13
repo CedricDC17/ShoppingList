@@ -154,9 +154,11 @@ Le bouton « Formater avec l'IA » et le rangement des rayons passent par la fon
 
 ```env
 AI_API_KEY=            # clé OpenRouter
-AI_MODEL=              # facultatif, par défaut openrouter/free (modèles gratuits)
+AI_MODEL=              # facultatif : un modèle, ou plusieurs séparés par des virgules (repli)
 AI_BASE_URL=           # facultatif, toute API compatible OpenAI
 ```
+
+Sans `AI_MODEL`, l'appli utilise Gemma 4 (gratuit, répond sans phase de réflexion), puis le routeur `openrouter/free` si Gemma est saturé. Les modèles qui « réfléchissent » avant de répondre peuvent dépasser le délai de 55 s.
 
 En local, `npm run dev` sert aussi `/api/ai` en lisant ces variables dans `.env`. Sur Vercel, elles se déclarent dans les réglages du projet. Sans clé, seul « Copier le prompt » fonctionne.
 

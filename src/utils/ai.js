@@ -6,7 +6,7 @@ const MESSAGES = {
   'not-configured': "L'IA n'est pas configurée : la clé API manque côté serveur.",
   'too-long': 'Texte trop long pour être mis en forme.',
   empty: 'Rien à mettre en forme.',
-  timeout: "L'IA a mis trop de temps à répondre. Réessaie.",
+  timeout: "L'IA a mis trop de temps à répondre. Réessaie, ou passe par « Copier le prompt ».",
 }
 
 async function callAI(payload) {
