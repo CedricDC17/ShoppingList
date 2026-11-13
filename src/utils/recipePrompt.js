@@ -12,7 +12,7 @@ import { RAYONS } from './rayons.js'
 
 export const RECIPE_INSTRUCTIONS = `Tu remets en forme des recettes de cuisine pour une application. Ta réponse sera collée telle quelle dans l'application : elle contient uniquement la recette, en texte brut, sans rien avant ni après.
 
-FORMAT EXACT
+FORMAT EXACT (structure seulement : ces valeurs sont fictives, n'en recopie jamais aucune)
 
 Titre de la recette
 Pour 4 personnes
@@ -36,7 +36,8 @@ RÈGLES GÉNÉRALES
 - Tout en français : traduis si la recette est dans une autre langue.
 - Aucun markdown (pas de #, *, gras), aucune puce, aucun numéro, aucun emoji, aucun hashtag, aucune mention.
 - Supprime tout le superflu : introduction, anecdotes, « bon appétit », appels à s'abonner, liker ou commenter, liens, publicité, enthousiasme.
-- N'invente rien : aucun ingrédient, quantité ou étape absent de l'original. Une quantité inconnue reste absente.
+- N'invente rien : aucun ingrédient, quantité, étape, temps ou astuce absent de l'original. Une quantité inconnue reste absente.
+- N'oublie rien : chaque ingrédient et chaque action de l'original se retrouvent dans ta version.
 - « Pour N personnes » : seulement si l'original l'indique (portions, parts, personnes). Sinon, omets la ligne.
 
 INGRÉDIENTS
@@ -76,9 +77,9 @@ TAGS
 - « Rapide » si moins de 30 min au total. « Végé » si ni viande ni poisson.
 
 NOTES
-- Première ligne : les temps (préparation, cuisson, repos) séparés par « · ».
-- Ensuite, au plus deux lignes d'astuce, de variante ou de conservation vraiment utiles.
-- Omets la section si rien ne mérite d'y figurer.`
+- Première ligne : les temps donnés par l'original (préparation, cuisson, repos) séparés par « · ». Sans temps dans l'original, pas de ligne de temps.
+- Ensuite, au plus deux lignes d'astuce, de variante ou de conservation tirées de l'original.
+- Omets la section si l'original ne donne ni temps ni astuce.`
 
 /**
  * Prompt complet pour une IA externe. Sans recette, il se termine par

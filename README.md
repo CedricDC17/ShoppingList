@@ -152,13 +152,29 @@ L'authentification se fait en **anonyme** : aucun compte à créer, tous les app
 
 Le bouton « Formater avec l'IA » et le rangement des rayons passent par la fonction serverless `api/ai.js`. La clé API ne quitte jamais le serveur : surtout pas de préfixe `VITE_`, qui la publierait dans le JavaScript de l'appli.
 
+**Avec une clé Claude** (payante, la plus fiable) :
+
 ```env
-AI_API_KEY=            # clé OpenRouter
-AI_MODEL=              # facultatif : un modèle, ou plusieurs séparés par des virgules (repli)
-AI_BASE_URL=           # facultatif, toute API compatible OpenAI
+AI_API_KEY=sk-ant-...          # clé Claude (console.anthropic.com)
+AI_PASSWORD=...                # mot de passe demandé dans l'appli
+AI_MODEL=claude-haiku-5-5      # facultatif : par défaut claude-opus-5-5
 ```
 
-Sans `AI_MODEL`, l'appli utilise Gemma 4 (gratuit, répond sans phase de réflexion), puis le routeur `openrouter/free` si Gemma est saturé. Les modèles qui « réfléchissent » avant de répondre peuvent dépasser le délai de 55 s.
+Une clé qui commence par `sk-ant-` passe par l'API Anthropic (SDK officiel) ; `AI_BASE_URL` est alors ignorée. `claude-opus-5-5` donne les meilleurs résultats ; `claude-haiku-5-5` est plus rapide et environ 40 fois moins cher. Fixer aussi une limite de dépense dans la console Anthropic.
+
+`AI_PASSWORD` : sans lui, quiconque trouve l'adresse de l'appli peut utiliser la clé. L'appli le demande au premier appel à l'IA puis le retient sur l'appareil.
+
+**Avec une clé gratuite** : [Groq](https://console.groq.com/keys), sans carte bancaire et rapide :
+
+```env
+AI_API_KEY=gsk_...                              # clé Groq
+AI_BASE_URL=https://api.groq.com/openai/v1
+AI_MODEL=openai/gpt-oss-120b,llama-3.3-70b-versatile
+```
+
+`AI_MODEL` accepte un ou plusieurs modèles séparés par des virgules : le suivant prend le relais si le précédent est saturé, en panne ou introuvable. Toute API compatible OpenAI convient.
+
+Sans `AI_BASE_URL` ni clé Claude, l'appli passe par OpenRouter (modèles gratuits Gemma 4 puis `openrouter/free`). Ça marche, mais compter 30 s ou plus par recette ; au-delà de 55 s, la demande est abandonnée.
 
 En local, `npm run dev` sert aussi `/api/ai` en lisant ces variables dans `.env`. Sur Vercel, elles se déclarent dans les réglages du projet. Sans clé, seul « Copier le prompt » fonctionne.
 

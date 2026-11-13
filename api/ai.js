@@ -4,84 +4,162 @@
 // front (toute variable VITE_ est publiée en clair dans le JavaScript).
 //
 // Variables d'environnement (réglages Vercel, ou .env en local) :
-//   AI_API_KEY   clé OpenRouter (obligatoire)
-//   AI_MODEL     modèle, ou plusieurs séparés par des virgules (le suivant
-//                prend le relais si le précédent est saturé ou en panne).
-//                Par défaut : DEFAULT_MODELS ci-dessous.
+//   AI_API_KEY   clé du fournisseur (obligatoire). Une clé Claude (sk-ant-…)
+//                passe par l'API Anthropic ; toute autre clé, par une API
+//                compatible OpenAI (AI_BASE_URL).
+//   AI_PASSWORD  mot de passe demandé dans l'appli avant tout appel à l'IA.
+//                Sans lui, n'importe qui connaissant l'adresse peut s'en servir.
+//   AI_MODEL     modèle, ou plusieurs séparés par des virgules : le suivant
+//                prend le relais si le précédent est saturé ou en panne.
+//                Par défaut : claude-opus-5-5 avec une clé Claude, sinon les
+//                modèles gratuits d'OpenRouter (DEFAULT_FREE_MODELS).
 //   AI_BASE_URL  API compatible OpenAI, par défaut https://openrouter.ai/api/v1
+//                (Groq : https://api.groq.com/openai/v1). Ignorée avec Claude.
 //
 // Tâches :
 //   { task: 'recipe', text }   -> { text }    recette remise au format de l'appli
 //   { task: 'rayons', items }  -> { rayons }  { "nom d'article": "id-rayon" }
 
+import { createHash, timingSafeEqual } from 'node:crypto'
+import Anthropic from '@anthropic-ai/sdk'
 import { RECIPE_INSTRUCTIONS, RAYON_INSTRUCTIONS } from '../src/utils/recipePrompt.js'
 import { RAYONS } from '../src/utils/rayons.js'
 
 const MAX_RECIPE_CHARS = 12000
 const MAX_ITEMS = 80
 const RAYON_IDS = new Set(RAYONS.map(r => r.id))
+// Vercel coupe la fonction à 60 s (vercel.json) : on garde de la marge
+const TIME_BUDGET_MS = 55000
 
-// Le routeur "openrouter/free" tombe souvent sur un modèle qui « réfléchit »
-// une minute avant de répondre. Gemma répond directement (réflexion désactivée
-// par défaut) : on le privilégie, le routeur ne sert qu'en dernier recours.
-const DEFAULT_MODELS = [
+// Modèles gratuits d'OpenRouter, lents (30 s et plus). Gemma répond sans
+// phase de réflexion ; le routeur "openrouter/free" sert en dernier recours.
+const DEFAULT_FREE_MODELS = [
   'google/gemma-4-26b-a4b-it:free',
   'google/gemma-4-31b-it:free',
   'openrouter/free',
 ]
+const DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5'
+// Modèles Claude qui acceptent le repli côté serveur en cas de refus
+const CLAUDE_FALLBACK_MODELS = new Set(['claude-fable-5-1', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5'])
 
-function modelParams() {
+const apiKey = () => process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || ''
+const usesClaude = () => apiKey().startsWith('sk-ant-')
+
+function modelList() {
   const models = (process.env.AI_MODEL || '').split(',').map(m => m.trim()).filter(Boolean)
-  const list = models.length ? models : DEFAULT_MODELS
-  // "models" (repli automatique) est propre à OpenRouter
-  return list.length > 1 ? { models: list } : { model: list[0] }
+  if (models.length) return models
+  return usesClaude() ? [DEFAULT_CLAUDE_MODEL] : DEFAULT_FREE_MODELS
 }
 
-async function complete(system, user, maxTokens) {
-  const key = process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY
+function upstreamError(message, status = 502) {
+  const error = new Error(message)
+  error.status = status
+  return error
+}
+
+function timeoutError() {
+  const error = new Error('timeout')
+  error.name = 'TimeoutError'
+  return error
+}
+
+/** Essaie chaque modèle dans l'ordre, dans la limite du temps imparti. */
+async function complete(system, user) {
+  const deadline = Date.now() + TIME_BUDGET_MS
+  let lastError
+  for (const model of modelList()) {
+    const remaining = deadline - Date.now()
+    if (remaining < 5000) break
+    try {
+      const text = usesClaude()
+        ? await completeClaude(model, system, user, remaining)
+        : await completeOpenAI(model, system, user, remaining)
+      // Certains modèles entourent malgré tout leur réponse d'un bloc ```
+      return text.trim().replace(/^```[a-z]*\s*\n?/i, '').replace(/\n?```$/, '').trim()
+    } catch (err) {
+      if (err.name === 'TimeoutError') throw err
+      lastError = err
+      console.error(`Modèle ${model} indisponible :`, err.message)
+    }
+  }
+  throw lastError
+}
+
+async function completeClaude(model, system, user, timeoutMs) {
+  const client = new Anthropic({ apiKey: apiKey() })
+  const params = {
+    model,
+    max_tokens: 16000,
+    system,
+    messages: [{ role: 'user', content: user }],
+    // Mise en forme simple : peu de réflexion, réponse plus rapide
+    output_config: { effort: 'low' },
+  }
+  // Le signal borne aussi les nouvelles tentatives automatiques du SDK
+  const options = { timeout: timeoutMs, signal: AbortSignal.timeout(timeoutMs) }
+
+  let response
+  try {
+    response = CLAUDE_FALLBACK_MODELS.has(model)
+      ? await client.beta.messages.create(
+          { ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' },
+          options
+        )
+      : await client.messages.create(params, options)
+  } catch (err) {
+    if (err instanceof Anthropic.APIConnectionTimeoutError || err instanceof Anthropic.APIUserAbortError) {
+      throw timeoutError()
+    }
+    if (err instanceof Anthropic.RateLimitError) throw upstreamError(err.message, 429)
+    if (err instanceof Anthropic.APIError) throw upstreamError(`${err.status ?? ''} ${err.message}`)
+    throw err
+  }
+
+  if (response.stop_reason === 'refusal') throw upstreamError('refus du modèle')
+  const text = response.content
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
+    .join('')
+  if (!text.trim()) throw upstreamError('réponse vide')
+  return text
+}
+
+async function completeOpenAI(model, system, user, timeoutMs) {
   const base = (process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '')
   const response = await fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${key}`,
+      Authorization: `Bearer ${apiKey()}`,
       'Content-Type': 'application/json',
       'X-Title': 'Liste Courses',
     },
     body: JSON.stringify({
-      ...modelParams(),
+      model,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
       temperature: 0.2,
-      max_tokens: maxTokens,
+      max_tokens: 4000,
     }),
-    signal: AbortSignal.timeout(55000),
+    signal: AbortSignal.timeout(timeoutMs),
   })
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
-    console.error('Réponse IA en erreur', response.status, detail.slice(0, 500))
-    const error = new Error('upstream')
-    error.status = response.status === 429 ? 429 : 502
-    throw error
+    throw upstreamError(`HTTP ${response.status} ${detail.slice(0, 300)}`, response.status === 429 ? 429 : 502)
   }
   const data = await response.json()
   const content = data.choices?.[0]?.message?.content
-  if (!content || !content.trim()) {
-    const error = new Error('empty')
-    error.status = 502
-    throw error
-  }
-  // Certains modèles entourent malgré tout leur réponse d'un bloc ```
-  return content.trim().replace(/^```[a-z]*\s*\n?/i, '').replace(/\n?```$/, '').trim()
+  if (!content || !content.trim()) throw upstreamError('réponse vide')
+  return content
 }
 
 async function formatRecipe(body) {
   const text = String(body.text || '').trim()
   if (!text) return [400, { error: 'empty' }]
   if (text.length > MAX_RECIPE_CHARS) return [413, { error: 'too-long' }]
-  const out = await complete(RECIPE_INSTRUCTIONS, `RECETTE À REFORMATER :\n\n${text}`, 4000)
+  const out = await complete(RECIPE_INSTRUCTIONS, `RECETTE À REFORMATER :\n\n${text}`)
   return [200, { text: out }]
 }
 
@@ -92,7 +170,7 @@ async function classifyRayons(body) {
   if (!items.length) return [400, { error: 'empty' }]
   if (items.length > MAX_ITEMS) return [413, { error: 'too-long' }]
 
-  const out = await complete(RAYON_INSTRUCTIONS, items.join('\n'), 4000)
+  const out = await complete(RAYON_INSTRUCTIONS, items.join('\n'))
   const json = out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1)
   let parsed
   try {
@@ -108,11 +186,24 @@ async function classifyRayons(body) {
   return [200, { rayons }]
 }
 
+/** Sans AI_PASSWORD, l'IA est ouverte à tous. Comparaison à durée constante. */
+function passwordOk(req) {
+  const expected = process.env.AI_PASSWORD
+  if (!expected) return true
+  let given = ''
+  try {
+    given = decodeURIComponent(String(req.headers?.['x-ai-password'] || ''))
+  } catch {
+    return false
+  }
+  const hash = value => createHash('sha256').update(value).digest()
+  return timingSafeEqual(hash(given), hash(expected))
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' })
-  if (!process.env.AI_API_KEY && !process.env.OPENROUTER_API_KEY) {
-    return res.status(503).json({ error: 'not-configured' })
-  }
+  if (!apiKey()) return res.status(503).json({ error: 'not-configured' })
+  if (!passwordOk(req)) return res.status(401).json({ error: 'password' })
 
   let body = req.body || {}
   if (typeof body === 'string') {
