@@ -6,10 +6,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 const isDev = process.env.NODE_ENV !== 'production'
 
 /**
- * En dev, sert la fonction Vercel api/ai.js sur /api/ai, pour tester l'IA
- * avec `npm run dev` sans passer par `vercel dev`. La clé est lue dans .env
- * (AI_API_KEY, sans préfixe VITE_ : elle ne doit pas finir dans le front).
+ * En dev, sert les fonctions Vercel (api/ai.js sur /api/ai, api/import.js sur
+ * /api/import) pour tester avec `npm run dev` sans passer par `vercel dev`.
+ * La clé est lue dans .env (AI_API_KEY, sans préfixe VITE_ : elle ne doit pas
+ * finir dans le front).
  */
+const DEV_FUNCTIONS = ['ai', 'import']
+
 function devApi() {
   return {
     name: 'dev-api',
@@ -18,25 +21,27 @@ function devApi() {
       for (const [key, value] of Object.entries(env)) {
         if (!(key in process.env)) process.env[key] = value
       }
-      server.middlewares.use('/api/ai', async (req, res) => {
-        let raw = ''
-        for await (const chunk of req) raw += chunk
-        try {
-          req.body = raw ? JSON.parse(raw) : {}
-        } catch {
-          req.body = raw
-        }
-        res.status = code => {
-          res.statusCode = code
-          return res
-        }
-        res.json = data => {
-          res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify(data))
-        }
-        const { default: handler } = await server.ssrLoadModule('/api/ai.js')
-        await handler(req, res)
-      })
+      for (const name of DEV_FUNCTIONS) {
+        server.middlewares.use(`/api/${name}`, async (req, res) => {
+          let raw = ''
+          for await (const chunk of req) raw += chunk
+          try {
+            req.body = raw ? JSON.parse(raw) : {}
+          } catch {
+            req.body = raw
+          }
+          res.status = code => {
+            res.statusCode = code
+            return res
+          }
+          res.json = data => {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(data))
+          }
+          const { default: handler } = await server.ssrLoadModule(`/api/${name}.js`)
+          await handler(req, res)
+        })
+      }
     },
   }
 }

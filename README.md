@@ -81,6 +81,7 @@ L'écran principal, celui qu'on ouvre le jour des courses.
   </tr>
 </table>
 
+- **Import par lien** : coller le lien d'une recette (Marmiton, 750g, Ricardo, Cuisine AZ, Journal des Femmes, BBC Good Food…) fait apparaître « Importer depuis marmiton.org ». Le serveur lit la fiche que le site publie pour les moteurs de recherche ([schema.org/Recipe](https://schema.org/Recipe)) : titre, portions, ingrédients, étapes et leurs parties, temps, et quelques tags. Sans IA, donc instantané et gratuit. Le lien d'origine est gardé dans les notes. Instagram, TikTok et la plupart des blogs n'ont pas cette fiche : coller alors le texte de la recette
 - **Recettes en plusieurs parties** : « Pour la pâte : », « Crème : » ou « Recette 2 : le glaçage » deviennent des intertitres, dans les ingrédients comme dans les étapes. La numérotation des étapes repart de 1 à chaque partie
 - **Mise au propre par IA**, deux options :
   - **Copier le prompt** copie des consignes + la recette en cours ; on les colle dans ChatGPT, Claude… et on recolle la réponse
@@ -162,7 +163,7 @@ AI_MODEL=claude-haiku-5-5      # facultatif : par défaut claude-opus-5-5
 
 Une clé qui commence par `sk-ant-` passe par l'API Anthropic (SDK officiel) ; `AI_BASE_URL` est alors ignorée. `claude-opus-5-5` donne les meilleurs résultats ; `claude-haiku-5-5` est plus rapide et environ 40 fois moins cher. Fixer aussi une limite de dépense dans la console Anthropic.
 
-`AI_PASSWORD` : sans lui, quiconque trouve l'adresse de l'appli peut utiliser la clé. L'appli le demande au premier appel à l'IA puis le retient sur l'appareil.
+`AI_PASSWORD` : sans lui, quiconque trouve l'adresse de l'appli peut utiliser la clé. L'appli le demande au premier appel à l'IA (ou au premier import par lien) puis le retient sur l'appareil.
 
 **Avec une clé gratuite** : [Groq](https://console.groq.com/keys), sans carte bancaire et rapide :
 
@@ -176,9 +177,15 @@ AI_MODEL=openai/gpt-oss-120b,llama-3.3-70b-versatile
 
 Sans `AI_BASE_URL` ni clé Claude, l'appli passe par OpenRouter (modèles gratuits Gemma 4 puis `openrouter/free`). Ça marche, mais compter 30 s ou plus par recette ; au-delà de 55 s, la demande est abandonnée.
 
-En local, `npm run dev` sert aussi `/api/ai` en lisant ces variables dans `.env`. Sur Vercel, elles se déclarent dans les réglages du projet. Sans clé, seul « Copier le prompt » fonctionne.
+En local, `npm run dev` sert aussi `/api/ai` et `/api/import` en lisant ces variables dans `.env`. Sur Vercel, elles se déclarent dans les réglages du projet. Sans clé, seul « Copier le prompt » fonctionne.
 
 Les fournisseurs des modèles gratuits peuvent conserver les textes envoyés : n'y envoyer que des recettes.
+
+### Import par lien
+
+La fonction `api/import.js` télécharge la page (le navigateur n'a pas le droit de lire celle d'un autre site) et `src/utils/recipeFromPage.js` en extrait le bloc `schema.org/Recipe`. Aucune clé API : elle demande seulement `AI_PASSWORD` s'il est défini.
+
+Comme le serveur va chercher une adresse fournie par l'utilisateur, il n'accepte que http(s) sur les ports standard, refuse les adresses locales et privées (revérifiées à chaque redirection), lit 3 Mo au plus et abandonne au bout de 10 s.
 
 ### Structure des données (Firestore)
 
@@ -236,6 +243,7 @@ src/
 │   ├── RecipeCard.jsx              Fiche en liste
 │   ├── RecipeSheet.jsx             Fiche plein écran + mode cuisine
 │   ├── RecipeAITools.jsx           « Copier le prompt » / « Formater avec l'IA »
+│   ├── RecipeLinkImport.jsx        « Importer depuis marmiton.org »
 │   ├── ServingsStepper.jsx         Sélecteur du nombre de personnes
 │   ├── MealRecipePicker.jsx        Choix d'une recette ou repas libre
 │   └── MissingIngredientsModal.jsx Ingrédients manquants
@@ -252,12 +260,16 @@ src/
     ├── tags.js             Tags de recettes
     ├── parseRecipe.js      Analyse d'une recette collée
     ├── recipePrompt.js     Consignes envoyées à l'IA (partagées avec api/)
+    ├── recipeFromPage.js   Recette d'une page web (schema.org) -> texte (utilisé par api/)
     ├── servings.js         Quantités selon le nombre de personnes
+    ├── api.js              Appels aux fonctions api/ (mot de passe) + import par lien
     ├── ai.js               Appels à /api/ai
     └── clipboard.js        Copie dans le presse-papier
 
 api/
-└── ai.js                   Fonction Vercel : mise en forme et rayons par IA
+├── ai.js                   Fonction Vercel : mise en forme et rayons par IA
+├── import.js               Fonction Vercel : import d'une recette par son lien
+└── _shared.js              Mot de passe et lecture du corps, communs aux deux
 ```
 
 ---
@@ -272,7 +284,7 @@ api/
 
 **Photos sans Firebase Storage** — Depuis septembre 2024, provisionner un bucket Cloud Storage impose le plan payant Blaze. Les photos de recettes sont donc redimensionnées à 1200 px, compressées, et enregistrées **dans Firestore** sous forme de data URL. La miniature vit dans le document de la recette (pour les cartes), la photo complète dans un document séparé chargé à la demande — sinon ouvrir la liste téléchargerait toutes les photos. Un plafond de 700 Ko, avec repli automatique sur une qualité inférieure, garantit de rester sous la limite de 1 Mio par document Firestore. Effet de bord agréable : les photos sont consultables hors-ligne, ce qu'une URL Storage ne permet pas.
 
-**Un seul chemin d'import** — L'IA ne renvoie pas de JSON : elle renvoie du texte dans le format que lit `parseRecipeText()`. Coller une recette, coller la réponse d'une IA externe ou utiliser le bouton intégré passent donc par le même parseur et le même aperçu, et le résultat reste relisible et corrigeable avant d'enregistrer.
+**Un seul chemin d'import** — L'IA ne renvoie pas de JSON : elle renvoie du texte dans le format que lit `parseRecipeText()`, tout comme l'import par lien. Coller une recette, coller la réponse d'une IA externe, utiliser le bouton intégré ou importer un lien passent donc par le même parseur et le même aperçu, et le résultat reste relisible et corrigeable avant d'enregistrer.
 
 **Dépendance inutilisée** — `tailwindcss`, `postcss` et `autoprefixer` figurent dans les `devDependencies` mais ne sont utilisés nulle part (aucun fichier de configuration, aucune classe utilitaire). Ils peuvent être retirés sans risque.
 

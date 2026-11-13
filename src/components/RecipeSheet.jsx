@@ -39,6 +39,29 @@ function messageErreurPhoto(err) {
   return "La photo n'a pas pu être enregistrée. Le reste de la recette a été enregistré."
 }
 
+/**
+ * Notes avec liens cliquables (« Lien : https://… » des recettes importées).
+ * Le lien s'affiche sous la forme courte du site : marmiton.org.
+ */
+function withLinks(text) {
+  return String(text || '')
+    .split(/(https?:\/\/[^\s<>"]+)/g)
+    .map((part, i) => {
+      if (i % 2 === 0) return part // texte ordinaire (split garde les liens aux rangs impairs)
+      let label = part
+      try {
+        label = new URL(part).hostname.replace(/^www\./, '')
+      } catch {
+        // lien illisible : affiché tel quel
+      }
+      return (
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="notes-link">
+          {label}
+        </a>
+      )
+    })
+}
+
 export default function RecipeSheet({ recipe, onClose, onSave }) {
   const [editMode, setEditMode] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -456,7 +479,7 @@ export default function RecipeSheet({ recipe, onClose, onSave }) {
                 placeholder="Nombre de portions, variantes, astuces…"
               />
             ) : (
-              <p className="sheet-notes">{recipe.notes}</p>
+              <p className="sheet-notes">{withLinks(recipe.notes)}</p>
             )}
           </div>
         )}

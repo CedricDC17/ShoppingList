@@ -20,8 +20,8 @@
 //   { task: 'recipe', text }   -> { text }    recette remise au format de l'appli
 //   { task: 'rayons', items }  -> { rayons }  { "nom d'article": "id-rayon" }
 
-import { createHash, timingSafeEqual } from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
+import { passwordOk, readBody } from './_shared.js'
 import { RECIPE_INSTRUCTIONS, RAYON_INSTRUCTIONS } from '../src/utils/recipePrompt.js'
 import { RAYONS } from '../src/utils/rayons.js'
 
@@ -186,33 +186,13 @@ async function classifyRayons(body) {
   return [200, { rayons }]
 }
 
-/** Sans AI_PASSWORD, l'IA est ouverte à tous. Comparaison à durée constante. */
-function passwordOk(req) {
-  const expected = process.env.AI_PASSWORD
-  if (!expected) return true
-  let given = ''
-  try {
-    given = decodeURIComponent(String(req.headers?.['x-ai-password'] || ''))
-  } catch {
-    return false
-  }
-  const hash = value => createHash('sha256').update(value).digest()
-  return timingSafeEqual(hash(given), hash(expected))
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' })
   if (!apiKey()) return res.status(503).json({ error: 'not-configured' })
   if (!passwordOk(req)) return res.status(401).json({ error: 'password' })
 
-  let body = req.body || {}
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body)
-    } catch {
-      return res.status(400).json({ error: 'bad-request' })
-    }
-  }
+  const body = readBody(req)
+  if (!body) return res.status(400).json({ error: 'bad-request' })
 
   try {
     const [status, payload] =

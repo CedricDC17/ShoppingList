@@ -260,8 +260,9 @@ export function parseIngredientLine(raw) {
   let line = stripLead(String(raw || '')).replace(/\s+/g, ' ').trim()
   if (!line) return null
 
-  // "farine : 200 g" / "farine - 200 g"
-  const splitMatch = line.match(/^(.+?)\s*[:–—-]\s*(\d[^:]*)$/)
+  // "farine : 200 g" / "farine - 200 g". Le tiret simple doit être précédé
+  // d'une espace : dans "3-4 blancs de poulet", c'est une fourchette.
+  const splitMatch = line.match(/^(.+?)(?:\s*[:–—]|\s+-)\s*(\d[^:]*)$/)
   if (splitMatch && /\d/.test(splitMatch[2])) {
     return { quantity: splitMatch[2].trim(), name: tidyName(splitMatch[1]) }
   }

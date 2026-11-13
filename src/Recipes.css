@@ -599,6 +599,11 @@
     padding: 0.8rem 0.95rem;
 }
 
+.notes-link {
+    color: var(--accent-strong);
+    text-decoration: underline;
+}
+
 /* ---------- Parties de recette (pâte, crème…) ---------- */
 .check-list li.list-section,
 .step-list li.list-section {
@@ -665,6 +670,19 @@
 }
 
 .btn-ghost:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+/* ---------- Import par lien ---------- */
+.link-import-btn {
+    max-width: 100%;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
+.link-import-btn:disabled {
     opacity: 0.6;
     cursor: wait;
 }

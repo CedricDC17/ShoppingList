@@ -7,7 +7,9 @@ import { Plus, Search, X, SlidersHorizontal } from 'lucide-react'
 import RecipeCard from './components/RecipeCard'
 import RecipeSheet from './components/RecipeSheet'
 import RecipeAITools from './components/RecipeAITools'
+import RecipeLinkImport from './components/RecipeLinkImport'
 import { parseRecipeText, cleanRecipe, isSection, countIngredients } from './utils/parseRecipe'
+import { findRecipeLink } from './utils/recipeFromPage'
 import { ALL_TAGS } from './utils/tags'
 import { normalizeName } from './utils/normalize'
 
@@ -57,7 +59,12 @@ export default function Recipes() {
   const toggleTag = tag =>
     setActiveTags(list => (list.includes(tag) ? list.filter(t => t !== tag) : [...list, tag]))
 
-  const preview = useMemo(() => (draft.trim() ? parseRecipeText(draft) : null), [draft])
+  // Un lien collé s'importe d'abord : l'aperçu attend la recette elle-même
+  const link = useMemo(() => findRecipeLink(draft), [draft])
+  const preview = useMemo(
+    () => (draft.trim() && !link ? parseRecipeText(draft) : null),
+    [draft, link]
+  )
 
   // Aperçu des ingrédients regroupés par partie : "Pâte : farine, beurre"
   const previewGroups = useMemo(() => {
@@ -185,7 +192,8 @@ export default function Recipes() {
             <button className="btn-close" onClick={() => setCreating(false)}>✖</button>
             <h2 className="overlay-title">Nouvelle recette</h2>
             <p className="missing-hint">
-              Colle une recette entière (n'importe quel format) ou tape simplement un titre.
+              Colle une recette entière (n'importe quel format), le lien d'une recette
+              (Marmiton, 750g…) ou tape simplement un titre.
               Recette brouillonne ? Fais-la mettre au propre par une IA.
             </p>
 
@@ -197,7 +205,11 @@ export default function Recipes() {
               placeholder={'Tarte aux pommes\n\nIngrédients :\n- 1 pâte brisée\n- 4 pommes\n- 100 g de sucre\n\nPréparation :\n1. Préchauffer le four à 180°C\n2. Étaler la pâte'}
             />
 
-            <RecipeAITools getText={() => draft} onApply={setDraft} />
+            {link ? (
+              <RecipeLinkImport key={link} url={link} onImport={setDraft} />
+            ) : (
+              <RecipeAITools getText={() => draft} onApply={setDraft} />
+            )}
 
             {preview && (
               <div className="parse-preview">
