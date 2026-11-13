@@ -260,8 +260,39 @@ export function findRecipeLink(text) {
   return /^www\./i.test(link) ? `https://${link}` : link
 }
 
-/** Page HTML -> texte de la recette, ou null si la page n'en décrit pas. */
+const OG_IMAGE = /<meta\b[^>]*\b(?:property|name)\s*=\s*["']og:image(?::url)?["'][^>]*>/i
+
+/**
+ * Adresses des photos, de la plus pertinente à la moins : celles de la
+ * recette (chaîne, tableau ou ImageObject), puis l'image de partage de la page.
+ */
+function imageUrls(recipe, html, pageUrl) {
+  const found = []
+  const add = value => {
+    if (typeof value === 'string') found.push(value)
+    else if (Array.isArray(value)) value.forEach(add)
+    else if (value && typeof value === 'object') add(value.contentUrl || value.url)
+  }
+  add(recipe.image)
+  add(String(html).match(OG_IMAGE)?.[0].match(/\bcontent\s*=\s*["']([^"']+)["']/i)?.[1])
+
+  const urls = found.map(raw => {
+    try {
+      const url = new URL(decodeEntities(raw.trim()), pageUrl || undefined)
+      return /^https?:$/.test(url.protocol) ? url.href : null
+    } catch {
+      return null
+    }
+  })
+  return [...new Set(urls.filter(Boolean))]
+}
+
+/**
+ * Page HTML -> { text, images } : la recette au format de l'appli et les
+ * adresses de ses photos. null si la page ne décrit pas de recette.
+ */
 export function recipeFromPage(html, url = '') {
   const recipe = findRecipeData(html)
-  return recipe ? recipeDataToText(recipe, url) : null
+  const text = recipe && recipeDataToText(recipe, url)
+  return text ? { text, images: imageUrls(recipe, html, url) } : null
 }

@@ -9,7 +9,7 @@ import { importRecipeFromUrl } from '../utils/api'
  * lien dans la zone de texte, puis passe par l'aperçu comme un collage.
  *
  * @param url       lien trouvé dans la zone de texte
- * @param onImport  (texte) => remplace le contenu de la zone de texte
+ * @param onImport  ({ text, image }) => texte de la recette et photo (data URL ou '')
  */
 export default function RecipeLinkImport({ url, onImport }) {
   const [loading, setLoading] = useState(false)

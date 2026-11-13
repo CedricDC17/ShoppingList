@@ -81,7 +81,7 @@ L'écran principal, celui qu'on ouvre le jour des courses.
   </tr>
 </table>
 
-- **Import par lien** : coller le lien d'une recette (Marmiton, 750g, Ricardo, Cuisine AZ, Journal des Femmes, BBC Good Food…) fait apparaître « Importer depuis marmiton.org ». Le serveur lit la fiche que le site publie pour les moteurs de recherche ([schema.org/Recipe](https://schema.org/Recipe)) : titre, portions, ingrédients, étapes et leurs parties, temps, et quelques tags. Sans IA, donc instantané et gratuit. Le lien d'origine est gardé dans les notes. Instagram, TikTok et la plupart des blogs n'ont pas cette fiche : coller alors le texte de la recette
+- **Import par lien** : coller le lien d'une recette (Marmiton, 750g, Ricardo, Cuisine AZ, Journal des Femmes, BBC Good Food…) fait apparaître « Importer depuis marmiton.org ». Le serveur lit la fiche que le site publie pour les moteurs de recherche ([schema.org/Recipe](https://schema.org/Recipe)) : titre, portions, ingrédients, étapes et leurs parties, temps, quelques tags et la photo. Sans IA, donc instantané et gratuit. La photo s'affiche dans l'aperçu (un bouton la retire) et est enregistrée à la création comme une photo ajoutée à la main ; le lien d'origine est gardé dans les notes. Instagram, TikTok et la plupart des blogs n'ont pas cette fiche : coller alors le texte de la recette
 - **Recettes en plusieurs parties** : « Pour la pâte : », « Crème : » ou « Recette 2 : le glaçage » deviennent des intertitres, dans les ingrédients comme dans les étapes. La numérotation des étapes repart de 1 à chaque partie
 - **Mise au propre par IA**, deux options :
   - **Copier le prompt** copie des consignes + la recette en cours ; on les colle dans ChatGPT, Claude… et on recolle la réponse
@@ -183,9 +183,9 @@ Les fournisseurs des modèles gratuits peuvent conserver les textes envoyés : n
 
 ### Import par lien
 
-La fonction `api/import.js` télécharge la page (le navigateur n'a pas le droit de lire celle d'un autre site) et `src/utils/recipeFromPage.js` en extrait le bloc `schema.org/Recipe`. Aucune clé API : elle demande seulement `AI_PASSWORD` s'il est défini.
+La fonction `api/import.js` télécharge la page (le navigateur n'a pas le droit de lire celle d'un autre site) et `src/utils/recipeFromPage.js` en extrait le bloc `schema.org/Recipe`, puis elle télécharge la photo de la recette (ou, à défaut, l'image de partage `og:image`) et la renvoie en data URL. Sans photo récupérable, l'import se fait sans. Aucune clé API : elle demande seulement `AI_PASSWORD` s'il est défini.
 
-Comme le serveur va chercher une adresse fournie par l'utilisateur, il n'accepte que http(s) sur les ports standard, refuse les adresses locales et privées (revérifiées à chaque redirection), lit 3 Mo au plus et abandonne au bout de 10 s.
+Comme le serveur va chercher une adresse fournie par l'utilisateur, il n'accepte que http(s) sur les ports standard, refuse les adresses locales et privées (revérifiées à chaque redirection), lit 3 Mo de page et 2,5 Mo de photo au plus, et abandonne au bout de 10 s pour la page et 6 s pour la photo.
 
 ### Structure des données (Firestore)
 

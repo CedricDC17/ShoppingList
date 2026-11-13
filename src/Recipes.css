@@ -675,6 +675,27 @@
 }
 
 /* ---------- Import par lien ---------- */
+.import-photo {
+    position: relative;
+    margin-top: 0.85rem;
+}
+
+.import-photo img {
+    display: block;
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.import-photo .btn-ghost {
+    position: absolute;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    background: var(--surface);
+    color: var(--text);
+}
+
 .link-import-btn {
     max-width: 100%;
     cursor: pointer;

@@ -1,6 +1,6 @@
 // src/Recipes.jsx
 import { useEffect, useMemo, useState } from 'react'
-import { collection, onSnapshot, addDoc, query, orderBy } from 'firebase/firestore'
+import { collection, onSnapshot, addDoc, query, orderBy, doc, setDoc } from 'firebase/firestore'
 import { db } from './firebase'
 import './Recipes.css'
 import { Plus, Search, X, SlidersHorizontal } from 'lucide-react'
@@ -10,6 +10,7 @@ import RecipeAITools from './components/RecipeAITools'
 import RecipeLinkImport from './components/RecipeLinkImport'
 import { parseRecipeText, cleanRecipe, isSection, countIngredients } from './utils/parseRecipe'
 import { findRecipeLink } from './utils/recipeFromPage'
+import { preparePhoto } from './utils/image'
 import { ALL_TAGS } from './utils/tags'
 import { normalizeName } from './utils/normalize'
 
@@ -25,6 +26,9 @@ export default function Recipes() {
   const [selected, setSelected] = useState(null)
   const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState('')
+  // Photo d'une recette importée par lien (data URL), enregistrée à la création
+  const [draftImage, setDraftImage] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     const q = query(colRef, orderBy('title'))
@@ -82,20 +86,61 @@ export default function Recipes() {
   const previewCount = preview ? countIngredients(preview.ingredients) : 0
   const previewSteps = preview ? preview.steps.filter(s => !isSection(s)).length : 0
 
+  const changeDraft = value => {
+    setDraft(value)
+    if (!value.trim()) setDraftImage('') // texte effacé : la photo importée part avec
+  }
+
+  const applyImport = ({ text, image }) => {
+    setDraft(text)
+    setDraftImage(image)
+  }
+
+  /**
+   * Photo importée -> { full, thumb } comme une photo ajoutée depuis la fiche
+   * (voir RecipeSheet). Une photo inutilisable n'empêche pas la création.
+   */
+  const prepareDraftImage = async () => {
+    if (!draftImage) return null
+    try {
+      const blob = await (await fetch(draftImage)).blob()
+      return await preparePhoto(blob)
+    } catch (err) {
+      console.error('Photo importée inutilisable :', err)
+      return null
+    }
+  }
+
   const createRecipe = async () => {
-    if (!preview?.title) return
-    const ref = await addDoc(colRef, {
-      title: preview.title,
-      servings: preview.servings,
-      ingredients: preview.ingredients,
-      steps: preview.steps,
-      notes: preview.notes,
-      tags: preview.tags,
-      imageUrl: '',
-    })
-    setCreating(false)
-    setDraft('')
-    setSelected({ id: ref.id, ...preview })
+    if (!preview?.title || saving) return
+    setSaving(true)
+    try {
+      const photo = await prepareDraftImage()
+      const thumbUrl = photo?.thumb || ''
+      const ref = await addDoc(colRef, {
+        title: preview.title,
+        servings: preview.servings,
+        ingredients: preview.ingredients,
+        steps: preview.steps,
+        notes: preview.notes,
+        tags: preview.tags,
+        thumbUrl,
+        imageUrl: '',
+      })
+      // Photo complète dans un document séparé, comme dans RecipeSheet
+      if (photo) {
+        await setDoc(doc(db, 'families', FAMILY_ID, 'recipePhotos', ref.id), {
+          dataUrl: photo.full,
+          updatedAt: Date.now(),
+        }).catch(err => console.error('Enregistrement de la photo impossible :', err))
+      }
+      setCreating(false)
+      setDraft('')
+      setDraftImage('')
+      setSelected({ id: ref.id, ...preview, thumbUrl })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -201,14 +246,23 @@ export default function Recipes() {
               className="sheet-textarea"
               autoFocus
               value={draft}
-              onChange={e => setDraft(e.target.value)}
+              onChange={e => changeDraft(e.target.value)}
               placeholder={'Tarte aux pommes\n\nIngrédients :\n- 1 pâte brisée\n- 4 pommes\n- 100 g de sucre\n\nPréparation :\n1. Préchauffer le four à 180°C\n2. Étaler la pâte'}
             />
 
             {link ? (
-              <RecipeLinkImport key={link} url={link} onImport={setDraft} />
+              <RecipeLinkImport key={link} url={link} onImport={applyImport} />
             ) : (
               <RecipeAITools getText={() => draft} onApply={setDraft} />
+            )}
+
+            {preview && draftImage && (
+              <div className="import-photo">
+                <img src={draftImage} alt="" />
+                <button type="button" className="btn-ghost small" onClick={() => setDraftImage('')}>
+                  <X size={14} /> Retirer la photo
+                </button>
+              </div>
             )}
 
             {preview && (
@@ -235,8 +289,8 @@ export default function Recipes() {
 
             <div className="overlay-footer">
               <button className="btn-modify" onClick={() => setCreating(false)}>Annuler</button>
-              <button className="btn-save" onClick={createRecipe} disabled={!preview?.title}>
-                Créer
+              <button className="btn-save" onClick={createRecipe} disabled={!preview?.title || saving}>
+                {saving ? 'Création…' : 'Créer'}
               </button>
             </div>
           </div>

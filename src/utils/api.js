@@ -71,10 +71,17 @@ const IMPORT_MESSAGES = {
   timeout: 'Le site a mis trop de temps à répondre. Réessaie.',
 }
 
-/** Lien d'une page de recette -> texte au format de l'appli (relu par parseRecipeText). */
+/**
+ * Lien d'une page de recette -> { text, image }
+ *   text   recette au format de l'appli (relue par parseRecipeText)
+ *   image  photo de la recette en data URL, ou ''
+ */
 export async function importRecipeFromUrl(url) {
   const { ok, status, data } = await postApi('/api/import', { url })
-  if (ok && data.text) return String(data.text)
+  if (ok && data.text) {
+    const image = String(data.image || '')
+    return { text: String(data.text), image: image.startsWith('data:image/') ? image : '' }
+  }
   if (status === 0) throw new Error("Pas de connexion : impossible d'importer.")
   if (status === 404 && !data.error) throw new Error("La fonction d'import est introuvable sur ce serveur.")
   throw new Error(IMPORT_MESSAGES[data.error] || 'Import impossible. Copie plutôt le texte de la recette.')
